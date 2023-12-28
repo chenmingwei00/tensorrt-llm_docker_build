@@ -1,0 +1,53 @@
+
+地址:https://github.com/NVIDIA/TensorRT-LLM/tree/main
+构建镜像步骤地址:https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/installation.md
+前言
+tensorrtllm 官方从零构建环境镜像，由于官方只提供了构建tensorrtllm 构建镜像方法，我们就按照提供步骤依次进行构建,通过构建发现
+主要还是利用docker build命令来构建环境镜像，主要运行命令在TensorRT-LLM/docker/Dockerfile.multi中，而环境安装sh文件在Ten\
+sorRT-LLM/common中，我们可以按照installation.md步骤依次进行，但由于国内，所以一定遇见因网络问题导致的错误，因此我写此博客，
+解决相关问题．
+
+问题１：Dockerfile.multi最初运行TensorRT-LLM/docker/common/install_base.sh
+    1.在构建tensrort镜像时，出现apt-get update 一直报错，原因大部分是源的问题，直接换为清华源即可解决
+    　因此在Dockerfile.multi修改为清华更新源即可，具体如下：
+      (1)由于构建镜像根路径在TensorRT-LLM/下，在TensorRT-LLM/docker，创建sources.list文件，内容如下：
+      　# 默认注释了源码镜像以提高 apt update 速度，如有需要可自行取消注释
+        deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal main restricted universe multiverse
+        # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal main restricted universe multiverse
+        deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-updates main restricted universe multiverse
+        # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-updates main restricted universe multiverse
+        deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-backports main restricted universe multiverse
+        # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-backports main restricted universe multiverse
+        deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-security main restricted universe multiverse
+        # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-security main restricted universe multiverse
+
+        # 预发布软件源，不建议启用
+        # deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-proposed main restricted universe multiverse
+        # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-proposed main restricted universe multiverse
+      (2) 修改TensorRT-LLM/docker/Dockerfile.multi文件，由原来的
+        COPY docker/common/install_base.sh install_base.sh
+        RUN bash ./install_base.sh && rm install_base.sh
+        修改为：
+        RUN rm /etc/apt/sources.list
+        COPY docker/sources.list /etc/apt/
+        COPY docker/common/install_base.sh install_base.sh
+        RUN bash ./install_base.sh && rm install_base.sh
+问题２：Dockerfile.multi最初运行TensorRT-LLM/docker/common/install_cmake.sh文件下载文件cmake-3.24.4-linux-x86_64.tar.gz因为是github文件报错．
+　　　 (1)解决办法，下载文件到本地路径TensorRT-LLM/docker/cmake-3.24.4-linux-x86_64.tar.gz
+　　　（２）修改TensorRT-LLM/docker/Dockerfile.multi：
+　　　　　　  COPY docker/cmake-3.24.4-linux-x86_64.tar.gz /tmp/
+            COPY docker/common/install_cmake.sh install_cmake.sh
+            RUN bash ./install_cmake.sh && rm install_cmake.sh
+问题３： OpenSSL SSL_read: error:0A000126:SSL routines::unexpected eof while reading, errno 0
+       同问题２
+以下问题基本上如同网络问题，因此不再一一叙述，具体可以对比本代码Dockerfile.multi文件，凡是存在了COPY docker/＊文件基本上就对应
+　了ｓｈ文件需要本地解压安装的，依赖全部放在TensorRT-LLM/docker/文件夹下，按照同样的方法进行安装即可
+
+问题４：在构建到Dockerfile.multi文件命令：
+        RUN python3 scripts/build_wheel.py ${BUILD_WHEEL_ARGS},由于默认是pip 源不包含国内源，可能会安装
+        python包报错，因此修改build_wheel.py，第66行，
+           build_run(
+        f"\"{sys.executable}\" -m pip install -r {requirements_filename} --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple"
+    )修改为清华源即可
+
+　　　
